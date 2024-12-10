@@ -1,5 +1,6 @@
 llama_index
 llama_index.llms.gemini
 llama_index.embeddings.gemini
-from llama_index.llms.vertex
+llama_index.embeddings.mistralai
+llama_index.llms.mistralai
 black
