@@ -13,7 +13,7 @@ from llama_index.core.selectors import LLMSingleSelector
 
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY") 
 
-documents = SimpleDirectoryReader(input_files=["metagpt.pdf"]).load_data()
+documents = SimpleDirectoryReader(input_files=["papers/metagpt.pdf"]).load_data()
 splitter = SentenceSplitter(chunk_size=1024)
 nodes = splitter.get_nodes_from_documents(documents) 
 

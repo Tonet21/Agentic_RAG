@@ -56,62 +56,34 @@ Settings.embed_model = MistralAIEmbedding(
 
 
 paper_to_tools_dict = {}
-# Loop through URLs and save each one
+for paper in papers:
+    documents = SimpleDirectoryReader(input_files=[f"papers/{paper}"]).load_data()
+    splitter = SentenceSplitter(chunk_size=1024)
+    nodes = splitter.get_nodes_from_documents(documents)
+    summary_index = SummaryIndex(nodes)
+    vector_index = VectorStoreIndex(nodes)
 
-# Loop through URLs and save each one
-for url, filename in zip(urls, papers):
-    try:
-        # Download the paper
-        response = requests.get(url)
-        response.raise_for_status()  # Raise an exception for bad status codes
+    summary_query_engine = summary_index.as_query_engine(
+        response_mode="tree_summarize", use_async=True
+    )
+    vector_query_engine = vector_index.as_query_engine()
 
-        # Save the paper
-        with open(filename, "wb") as file:
-            file.write(response.content)
-        print(f"Downloaded {filename} successfully")
 
-        # Process the downloaded paper
-        try:
-            # Load documents from the downloaded file
-            documents = SimpleDirectoryReader(input_files=[filename]).load_data()
 
-            # Split documents into nodes
-            splitter = SentenceSplitter(chunk_size=1024)
-            nodes = splitter.get_nodes_from_documents(documents)
 
-            # Create indexes
-            vector_index = VectorStoreIndex(nodes)
-            summary_index = SummaryIndex(nodes)
 
-            # Create query engines
-            summary_query_engine = summary_index.as_query_engine(
-                response_mode="tree_summarize", use_async=True
-            )
-            vector_query_engine = vector_index.as_query_engine()
+    summary_tool = QueryEngineTool.from_defaults(
+        name=f"summary_tool_{paper}",
+        query_engine=summary_query_engine,
+        description=(f"Useful for summarization questions related to {paper}"),
+    )
 
-            # Create tools
-            summary_tool = QueryEngineTool.from_defaults(
-                query_engine=summary_query_engine,
-                description=(
-                    f"Useful for summarization questions related to {filename}"
-                ),
-            )
-
-            vector_tool = QueryEngineTool.from_defaults(
-                query_engine=vector_query_engine,
-                description=(
-                    f"Useful for retrieving specific context from the {filename} paper."
-                ),
-            )
-
-            # Store tools in dictionary
-            paper_to_tools_dict[filename] = [vector_tool, summary_tool]
-
-        except Exception as process_error:
-            print(f"Error processing {filename}: {process_error}")
-
-    except requests.RequestException as download_error:
-        print(f"Failed to download {filename}: {download_error}")
+    vector_tool = QueryEngineTool.from_defaults(
+        name=f"vector_tool_{paper}",
+        query_engine=vector_query_engine,
+        description=(f"Useful for retrieving specific context from the {paper} paper."),
+    )
+    paper_to_tools_dict[paper] = [vector_tool, summary_tool]
 
 all_tools = [t for paper in papers for t in paper_to_tools_dict[paper]]
 # define an "object" index and retriever over these tools

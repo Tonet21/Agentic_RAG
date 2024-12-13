@@ -21,9 +21,6 @@ from pathlib import Path
 
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY") 
 
-documents = SimpleDirectoryReader(input_files=["metagpt.pdf"]).load_data()
-splitter = SentenceSplitter(chunk_size=1024)
-nodes = splitter.get_nodes_from_documents(documents) 
 
 Settings.llm = Gemini(
     model="models/gemini-1.5-flash", api_key=GOOGLE_API_KEY
@@ -52,7 +49,7 @@ papers = [
 
 paper_to_tools_dict = {}
 for paper in papers:
-    documents = SimpleDirectoryReader(input_files=[paper]).load_data()
+    documents = SimpleDirectoryReader(input_files=[f"papers/{paper}"]).load_data()
     splitter = SentenceSplitter(chunk_size=1024)
     nodes = splitter.get_nodes_from_documents(documents)
     summary_index = SummaryIndex(nodes)
