@@ -10,35 +10,10 @@ from llama_index.core.agent import FunctionCallingAgentWorker
 from llama_index.core.agent import AgentRunner
 from llama_index.core import VectorStoreIndex
 from llama_index.core.objects import ObjectIndex
-import requests
-
-urls = [
-    "https://openreview.net/pdf?id=VtmBAGCN7o",
-    "https://openreview.net/pdf?id=6PmJoRfdaK",
-    "https://openreview.net/pdf?id=LzPWWPAdY4",
-    "https://openreview.net/pdf?id=VTF8yNQM66",
-    "https://openreview.net/pdf?id=hSyW5go0v8",
-    "https://openreview.net/pdf?id=9WD9KwssyT",
-    "https://openreview.net/pdf?id=yV6fD7LYkF",
-    "https://openreview.net/pdf?id=hnrB5YHoYu",
-    "https://openreview.net/pdf?id=WbWtOYIzIK",
-    "https://openreview.net/pdf?id=c5pwL0Soay",
-    "https://openreview.net/pdf?id=TpD2aG1h0D",
-]
-
-papers = [
-    "metagpt.pdf",
-    "longlora.pdf",
-    "loftq.pdf",
-    "swebench.pdf",
-    "selfrag.pdf",
-    "zipformer.pdf",
-    "values.pdf",
-    "finetune_fair_diffusion.pdf",
-    "knowledge_card.pdf",
-    "metra.pdf",
-    "vr_mcl.pdf",
-]
+from llama_index.core.vector_stores import MetadataFilters
+from typing import List, Optional
+from llama_index.core.vector_stores import FilterCondition
+from llama_index.core.tools import FunctionTool
 
 
 mistral_api_key = os.environ.get("MISTRAL_API_KEY")
@@ -55,38 +30,62 @@ Settings.embed_model = MistralAIEmbedding(
 )
 
 
+papers = [
+    "metagpt.pdf",
+    "longlora.pdf",
+    "selfrag.pdf",
+]
+
 paper_to_tools_dict = {}
 for paper in papers:
     documents = SimpleDirectoryReader(input_files=[f"papers/{paper}"]).load_data()
     splitter = SentenceSplitter(chunk_size=1024)
     nodes = splitter.get_nodes_from_documents(documents)
-    summary_index = SummaryIndex(nodes)
     vector_index = VectorStoreIndex(nodes)
 
-    summary_query_engine = summary_index.as_query_engine(
-        response_mode="tree_summarize", use_async=True
+    def vector_query(query: str, page_numbers: Optional[List[str]] = None) -> str:
+        """Use to answer questions over a given paper.
+
+        Useful if you have specific questions over the paper.
+        Always leave page_numbers as None UNLESS there is a specific page you want to search for.
+
+        Args:
+            query (str): the string query to be embedded.
+            page_numbers (Optional[List[str]]): Filter by set of pages. Leave as NONE
+                if we want to perform a vector search
+                over all pages. Otherwise, filter by the set of specified pages.
+
+        """
+
+        page_numbers = page_numbers or []
+        metadata_dicts = [{"key": "page_label", "value": p} for p in page_numbers]
+
+        query_engine = vector_index.as_query_engine(
+            similarity_top_k=2,
+            filters=MetadataFilters.from_dicts(
+                metadata_dicts, condition=FilterCondition.OR
+            ),
+        )
+        response = query_engine.query(query)
+        return response
+
+    vector_query_tool = FunctionTool.from_defaults(
+        name=f"vector_tool_{paper}", fn=vector_query
     )
-    vector_query_engine = vector_index.as_query_engine()
 
-
-
-
-
+    summary_index = SummaryIndex(nodes)
+    summary_query_engine = summary_index.as_query_engine(
+        response_mode="tree_summarize",
+        use_async=True,
+    )
     summary_tool = QueryEngineTool.from_defaults(
         name=f"summary_tool_{paper}",
         query_engine=summary_query_engine,
-        description=(f"Useful for summarization questions related to {paper}"),
+        description=(f"Useful if you want to get a summary of {paper}"),
     )
-
-    vector_tool = QueryEngineTool.from_defaults(
-        name=f"vector_tool_{paper}",
-        query_engine=vector_query_engine,
-        description=(f"Useful for retrieving specific context from the {paper} paper."),
-    )
-    paper_to_tools_dict[paper] = [vector_tool, summary_tool]
+    paper_to_tools_dict[paper] = [vector_query_tool, summary_tool]
 
 all_tools = [t for paper in papers for t in paper_to_tools_dict[paper]]
-# define an "object" index and retriever over these tools
 
 
 obj_index = ObjectIndex.from_objects(
@@ -106,8 +105,6 @@ Please always use the tools provided to answer a question. Do not rely on prior 
 )
 agent = AgentRunner(agent_worker)
 
-response = agent.query(
-    "Tell me about the evaluation dataset used "
-    "in MetaGPT and compare it against SWE-Bench"
-)
+response = agent.query("Give me a summary of Self-RAG and a summary of longlora")
+
 print(str(response))
