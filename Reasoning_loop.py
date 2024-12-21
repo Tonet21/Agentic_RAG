@@ -24,7 +24,7 @@ mistral_api_key = os.environ.get("MISTRAL_API_KEY")
 
 Settings.llm = MistralAI(
     api_key=mistral_api_key,
-    model="mistral-large-latest",  # or "mistral-medium", "mistral-small"
+    model="mistral-large-latest"
 )
 
 
